@@ -16,7 +16,7 @@ class ToyTokenizer:
             item.strip() for item in preprocessed if item.strip()
         ]
         unique_words = sorted(list(set(preprocessed)))
-        unique_words.extend(["<|endoftext|>", "<|unk|>"])
+        unique_words.extend(["", "<|unk|>"])
 
         self.vocab_size = len(unique_words)
 
@@ -34,26 +34,6 @@ class ToyTokenizer:
 
         ids = [self.word_to_id.get(s, self.word_to_id['<|unk|>']) for s in preprocessed]
 
-
-        # for s in preprocessed:
-        #     if s in self.word_to_id:
-        #         ids.append(self.word_to_id[s])
-        #     else:
-        #         raise ValueError(f"Unknown word! {s}")
-        
-        # for s in preprocessed:
-        #     if s in self.word_to_id:
-        #         ids.append(self.word_to_id[s])
-        #     else:
-        #         # add to the vocab
-        #         new_word = s
-        #         new_word_id = self.vocab_size
-        #         self.id_to_word[new_word_id] = new_word
-        #         self.word_to_id[new_word] = new_word_id
-        #         # increase vocabl size
-        #         self.vocab_size += 1
-        #         # add the newly added token to the final sequence 
-        #         ids.append(new_word_id)
         return ids
         
     
@@ -159,9 +139,18 @@ class SimpleSelfAttention:
         return res
 
     def forward(self, embeddings):
-        Q = self.multiply(embeddings, self.Wq)
-        K = self.multiply(embeddings, self.Wk)
-        V = self.multiply(embeddings, self.Wv)
+        # Add positional embeddings
+        pos_embeddings = []
+        for pos in range(len(embeddings)):
+            token_emb = embeddings[pos]
+            pos_emb = self.P.get(pos)
+            # Add positional encoding to token embedding
+            combined = [token_emb[i] + pos_emb[i] for i in range(self.dim)]
+            pos_embeddings.append(combined)
+        
+        Q = self.multiply(pos_embeddings, self.Wq)
+        K = self.multiply(pos_embeddings, self.Wk)
+        V = self.multiply(pos_embeddings, self.Wv)
         attended = attention(Q, K, V)
         return attended
 
@@ -234,29 +223,213 @@ def attention(Q, K, V):
         outputs.append(out)
     return outputs
 
-def train_one_example(input_tokens: list, target_token, last_embedding, prediction, pred_head, learning_rate=0.5):
-    """Train on a single sentence"""
-    
-    input_tokens
-    target_token
-    last_embedding
-    prediction
-    predicted_token = prediction.index(max(prediction))
+def train_one_example(input_tokens: list, target_token, last_embedding, prediction, pred_head, pos_emb, emb_mat, learning_rate=0.5):
+    """Train on a single sentence with embedding updates"""
+   
+    # Step 1 Calclate gradient for the last embedding
+    # This tells us "how should we change the embedding to improve the prediction?"
+    embedding_gradient = [0.0] * len(last_embedding)
 
-    # print("Before training:")
-    # print(tokenizer.detokenize([predicted_token]))
-    
-    # push right token up. gradient--how much to push. if weere not very wronf--push a little
+    # Gradient from correct token (push UP)
+    gradient_correct = 1.0 - prediction[target_token] # we substract the predicted probability of the target word from 1
+    # so if the model predicted a high probability--we will change weights slightly, if low--stronger   
+    # push right token up. gradient--how much to push. if we were not very wrong--push a little
     for i in range(len(pred_head.weight_matrix)):
-        gradient = 1.0 - prediction[target_token] # how wrong we were (0 to 1)
-        pred_head.weight_matrix[i][target_token] += learning_rate * gradient * last_embedding[i]
+        # Update the prediction head weights
+        pred_head.weight_matrix[i][target_token] += learning_rate * gradient_correct * last_embedding[i]
+        # Accumulate gradient for embedding
+        embedding_gradient[i] += gradient_correct * pred_head.weight_matrix[i][target_token]
     
-    # push wrong tokens down
+    # Gradient from wrong tokens (push DOWN)
+    for wrong_word_id in range(len(prediction)):
+        if wrong_word_id != target_token:
+            for i in range(len(pred_head.weight_matrix)):
+                # Update prediction head weights
+                pred_head.weight_matrix[i][wrong_word_id] -= learning_rate * prediction[wrong_word_id] * last_embedding[i]
+                # Accumulate gradient for embedding
+                embedding_gradient[i] -= prediction[wrong_word_id] * pred_head.weight_matrix[i][wrong_word_id]
+    
+    # Step 2: Update the embedding for the last token
+    # Use smaller ;earning rate cause embeddings are more sensetive
+    emb_lr = learning_rate * 0.1
+    # The last embedding came from the last input token
+    
+    for pos, token_id in enumerate(input_tokens):
+        decay = 0.5 ** (len(input_tokens) - pos - 1)
+        emb_mat.add_inplace_to_row(token_id, embedding_gradient, learning_rate * 0.1 * decay)
+    
+    # Step 3: Update positional embeddings
+    for pos in range(len(input_tokens)):
+        decay = 0.5 ** (len(input_tokens) - pos - 1)
+        pos_emb.add_inplace_to_row(pos, embedding_gradient, emb_lr * decay)
+
+    # TODO: Step 4: Update weights
+
+def attention_backward(Q, K, V, grad_outputs):
+    """Backpropagate through attenton
+    
+    Q, K, V: The queries, keys, and values from forward pass
+    grad_outputs: Gradient flowing back (list of gradients for each position)
+    
+    Returns: grad_V, grad_K, grad_Q (gradients for values, keys, and queries)"""
+    seq_len = len(Q)
+    dim = len(V[0])
+
+    # Init gradients
+    grad_V = [[0.0] * dim for _ in range(seq_len)]
+    grad_K = [[0.0] * dim for _ in range(seq_len)]
+    grad_Q = [[0.0] * dim for _ in range(seq_len)]
+
+    # For each query position
+    for i in range(seq_len):
+        # Recalculate attention weihts (same as forward pass)
+        scores = []
+        for j in range(seq_len):
+            score = dot(Q[i], K[j])
+            scores.append(score)
+        
+        weights = softmax(scores)
+
+        # Gradient from output to V
+        # output[i] = sum(weights[j] x V[j])
+        # So: grad_V[j] += weights[j] x grad_output[i]
+        for j in range(seq_len):
+            for d in range(dim):
+                grad_V[j][d] += weights[j] * grad_outputs[i][d]
+
+        # Gradients from output tp attention weights
+        # This is trickier - we need to backprop through softmax
+        grad_weights = [0.0] * seq_len
+        for j in range(seq_len):
+            # How much does changing weight[j] affect the output?
+            for d in range(dim): # grad_outputs[i] x V[j]
+                grad_weights[j] += grad_outputs[i][d] * V[j][d]
+            
+        # Gradient through softmax
+        # softmax derivative: softmax[i] x (grad[i] - sum(softmax[j] x grad[j]))
+        sum_weighted_grad = sum(weights[j] * grad_weights[j] for j in range(seq_len))
+        grad_scores = [weights[j] * (grad_weights[j] - sum_weighted_grad)
+                      for j in range(seq_len)]
+        
+        # Gradient from scores to Q and K
+        # score[j] = dot(Q[i], K[j])
+        for j in range(seq_len):
+            for d in range(dim):
+                # grad_Q[i] += grad_scores[j] x K[j]
+                grad_Q[i][d] += grad_scores[j] * K[j][d]
+                # grad_K[j] += grad_scores[j] x Q[i]
+                grad_K[j][d] += grad_scores[j] * Q[i][d]
+        
+    return grad_V, grad_K, grad_Q
+
+def train_one_example_with_attention(input_tokens, target_token, attention_layer, 
+                                     pred_head, learning_rate=0.1):
+    """Full training with attention backprop"""
+    
+    # === FORWARD PASS ===
+    embedded = attention_layer.E.embed(input_tokens)
+    
+    # Add positional embeddings
+    pos_embeddings = []
+    for pos in range(len(embedded)):
+        token_emb = embedded[pos]
+        pos_emb = attention_layer.P.get(pos)
+        combined = [token_emb[i] + pos_emb[i] for i in range(attention_layer.dim)]
+        pos_embeddings.append(combined)
+    
+    # Project to Q, K, V
+    Q = attention_layer.multiply(pos_embeddings, attention_layer.Wq)
+    K = attention_layer.multiply(pos_embeddings, attention_layer.Wk)
+    V = attention_layer.multiply(pos_embeddings, attention_layer.Wv)
+    
+    # Apply attention
+    attended = attention(Q, K, V)
+    last_embedding = attended[-1]
+    
+    # Prediction
+    prediction = pred_head.predict(last_embedding)
+    
+    # === BACKWARD PASS ===
+    
+    # Step 1: Gradient from prediction head (you already have this)
+    embedding_gradient = [0.0] * len(last_embedding)
+    gradient_correct = 1.0 - prediction[target_token]
+    
+    for i in range(len(pred_head.weight_matrix)):
+        pred_head.weight_matrix[i][target_token] += learning_rate * gradient_correct * last_embedding[i]
+        embedding_gradient[i] += gradient_correct * pred_head.weight_matrix[i][target_token]
+    
     for wrong_word_id in range(len(prediction)):
         if wrong_word_id != target_token:
             for i in range(len(pred_head.weight_matrix)):
                 pred_head.weight_matrix[i][wrong_word_id] -= learning_rate * prediction[wrong_word_id] * last_embedding[i]
+                embedding_gradient[i] -= prediction[wrong_word_id] * pred_head.weight_matrix[i][wrong_word_id]
     
+    # Step 2: Create gradient for all positions (only last position has gradient)
+    grad_attended = [[0.0] * attention_layer.dim for _ in range(len(input_tokens))]
+    grad_attended[-1] = embedding_gradient  # Only last position gets gradient
+    
+    # Step 3: Backprop through attention
+    grad_V, grad_K, grad_Q = attention_backward(Q, K, V, grad_attended)
+    
+    # Step 4: Backprop through projections and update Wv, Wk, Wq
+    grad_Wv, grad_pos_from_V = projection_backward(pos_embeddings, attention_layer.Wv, grad_V)
+    grad_Wk, grad_pos_from_K = projection_backward(pos_embeddings, attention_layer.Wk, grad_K)
+    grad_Wq, grad_pos_from_Q = projection_backward(pos_embeddings, attention_layer.Wq, grad_Q)
+    
+    # Update attention weights
+    attn_lr = learning_rate * 0.01  # Smaller learning rate for attention
+    for i in range(attention_layer.dim):
+        for j in range(attention_layer.dim):
+            attention_layer.Wv[i][j] += attn_lr * grad_Wv[i][j]
+            attention_layer.Wk[i][j] += attn_lr * grad_Wk[i][j]
+            attention_layer.Wq[i][j] += attn_lr * grad_Wq[i][j]
+    
+    # Step 5: Combine gradients for embeddings
+    grad_embeddings = [[0.0] * attention_layer.dim for _ in range(len(input_tokens))]
+    for pos in range(len(input_tokens)):
+        for d in range(attention_layer.dim):
+            grad_embeddings[pos][d] = (grad_pos_from_V[pos][d] + 
+                                       grad_pos_from_K[pos][d] + 
+                                       grad_pos_from_Q[pos][d])
+    
+    # Step 6: Update embeddings and positional embeddings
+    emb_lr = learning_rate * 0.1
+    for pos, token_id in enumerate(input_tokens):
+        attention_layer.E.add_inplace_to_row(token_id, grad_embeddings[pos], emb_lr)
+        attention_layer.P.add_inplace_to_row(pos, grad_embeddings[pos], emb_lr)
+
+def projection_backward(inputs, W, grad_output):
+    """
+    Backprop through: output = inputs × W
+    
+    inputs: Original input vectors (seq_len × dim)
+    W: Weight matrix (dim × dim)
+    grad_output: Gradient from next layer (seq_len × dim)
+    
+    Returns: grad_W, grad_inputs
+    """
+    seq_len = len(inputs)
+    dim = len(W)
+    
+    # Initialize gradients
+    grad_W = [[0.0] * dim for _ in range(dim)]
+    grad_inputs = [[0.0] * dim for _ in range(seq_len)]
+    
+    # For each position in sequence
+    for pos in range(seq_len):
+        # Gradient for W: grad_W[i][j] += input[pos][j] × grad_output[pos][i]
+        for i in range(dim):
+            for j in range(dim):
+                grad_W[i][j] += inputs[pos][j] * grad_output[pos][i]
+        
+        # Gradient for inputs: grad_input[pos][j] += W[i][j] × grad_output[pos][i]
+        for j in range(dim):
+            for i in range(dim):
+                grad_inputs[pos][j] += W[i][j] * grad_output[pos][i]
+    
+    return grad_W, grad_inputs
+
 def cross_entropy_loss(predictions: list[float], target_idx):
     """
     Calculate how wrong were we
@@ -264,60 +437,46 @@ def cross_entropy_loss(predictions: list[float], target_idx):
     :param predictions: generated predictions
     :param target_idx: Description
     """
+    # print("cross enytopy =========")
+    # print(-math.log(max(predictions[target_idx], 1e-10)))
+    # print("cross entropy ^^^^^^^^^^^")
     return -math.log(max(predictions[target_idx], 1e-10))
 
-def generate_a_token(embedding: list[float], pred_head):
+def generate_a_token(embedding: list[float], pred_head: PredictionHead):
     predictions = pred_head.predict(embedding)
     best_prediction_id = predictions.index(max(predictions))
     return best_prediction_id
+
+def sample_token(predictions: list[float], temperature=1.0):
+    """
+    Sample a token based on probability distribution
+    
+    :param predictions: probability distribution over vocabulary
+    :param temperature: controls randomness (higher = more random)
+    """
+    if temperature == 0:
+        return predictions.index(max(predictions))
+    
+    # Apply temperature
+    scaled = [p ** (1.0 / temperature) for p in predictions]
+    total = sum(scaled)
+    probs = [p / total for p in scaled]
+    
+    # Sample from distribution
+    r = random.random()
+    cumulative = 0
+    for i, p in enumerate(probs):
+        cumulative += p
+        if r <= cumulative:
+            return i
+    return len(probs) - 1
 
 # Training data
 
 with open("./cat_corpus.txt", "r", encoding="utf-8") as f:
     raw_text = f.read()
-cat_sentences = [
-    "the cat sat on the mat",
-    "my cat loves to nap",
-    "cats have soft fur",
-    "a cat chased a mouse",
-    "the black cat purred loudly",
-    "cats enjoy playing with yarn",
-    "my cat eats fish for dinner",
-    "cats can see in the dark",
-    "the orange cat climbed the tree",
-    "cats make me happy",
-    "a cat has sharp claws",
-    "cats drink milk sometimes",
-    "the cat slept all day",
-    "cats are good pets",
-    "my cat likes to cuddle",
-    "cats hunt small birds",
-    "the cat washed its face",
-    "cats have nine lives",
-    "a cat meowed at the door",
-    "cats jump very high",
-    "the cat ran fast",
-    "cats have whiskers for sensing",
-    "my cat has green eyes",
-    "cats are curious animals",
-    "the cat found a warm spot",
-    "cats purr when content",
-    "a cat scratched the sofa",
-    "cats groom themselves often",
-    "the cat watched the birds",
-    "cats are independent creatures",
-    "my cat follows me everywhere",
-    "cats like cardboard boxes",
-    "the cat caught a mouse",
-    "cats have retractable claws",
-    "a cat slept in the sun",
-    "cats communicate with meows",
-    "the cat rubbed against my leg",
-    "cats can be very playful",
-    "my cat hides under the bed",
-    "cats are clean animals"
-]
-cat_corpus = " ".join(cat_sentences)
+
+# Tokenize the entire corpus once
 print(raw_text[:99])
 preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
 preprocessed = [item.strip() for item in preprocessed if item.strip()]
@@ -326,17 +485,22 @@ all_words = sorted(set(preprocessed))
 vocab_size = len(all_words)
 print(vocab_size)
 
-
 dimensions = 64
 epochs_no = 3
+temperature = 0.8
+context_window = 32  # max_len for attention
 
 # Initialize KEMP (your tiny transformer named after your boyfriend!)
 t = ToyTokenizer(raw_text)
-emb_mat = EmbeddingMatrix(t.vocab_size, dimen=dimensions)
+attention_layer = SimpleSelfAttention(t.vocab_size, dimensions, max_len=context_window)
+# Use the attention layer's embedding matrix
+emb_mat = attention_layer.E
+pos_emb = attention_layer.P
 pred_head = PredictionHead(t.vocab_size, dimensions)
-attention_layer = SimpleSelfAttention(t.vocab_size, dimensions)
 
-
+# Tokenize entire corpus for training
+all_tokens = t.tokenize(raw_text.lower())
+print(f"Total tokens: {len(all_tokens)}")
 
 print("Training phase...")
 for epoch in range(epochs_no):
@@ -344,17 +508,21 @@ for epoch in range(epochs_no):
     correct = 0
     total = 0
 
-    for sentence in cat_sentences: 
-        tokens = t.tokenize(sentence)
-        input_tokens = tokens[:-1]
-        target_token = tokens[-1]
+    # Sample random positions instead of using every token (much faster)
+    num_samples = min(5000, len(all_tokens) - context_window)  # Train on 5000 random samples per epoch
+    sample_positions = random.sample(range(context_window, len(all_tokens)), num_samples)
+    
+    for i in sample_positions:
+        # Take previous context_window-1 tokens as input
+        input_tokens = all_tokens[i - (context_window - 1):i]
+        target_token = all_tokens[i]
 
         embedded = emb_mat.embed(input_tokens)
         attended = attention_layer.forward(embedded)
         last_embedding = attended[-1]
 
         prediction = pred_head.predict(last_embedding)
-        loss = cross_entropy_loss(prediction,target_token)
+        loss = cross_entropy_loss(prediction, target_token)
         epoch_loss += loss
 
         # Track accuracy
@@ -364,11 +532,12 @@ for epoch in range(epochs_no):
         total += 1
 
         # Update weights
-        train_one_example(input_tokens, target_token, last_embedding, prediction,pred_head, learning_rate=0.1)
-
-    avg_loss = epoch_loss / len(cat_sentences)
+        train_one_example_with_attention(input_tokens, target_token, attention_layer, pred_head)
+    
+    avg_loss = epoch_loss / total
     accuracy = correct / total * 100
     print(f"Epoch {epoch + 1} - Loss: {avg_loss:.4f} - Accuracy: {accuracy:.1f}%")
+
 # Main loop
 try:
     while True:
@@ -386,12 +555,16 @@ try:
             continue
         result = tokens
 
-        embeddings = emb_mat.embed(tokens)[-1]
         for i in range(n_preds):
-            embedded = emb_mat.embed(result)
+            # Use only the last max_len-1 tokens to stay within position embeddings
+            context = result[-(attention_layer.max_len - 1):]
+            embedded = emb_mat.embed(context)
             attended = attention_layer.forward(embedded)
             last_embedding = attended[-1]
-            next_token = generate_a_token(last_embedding, pred_head)
+            
+            # Use sampling instead of argmax for diversity
+            prediction = pred_head.predict(last_embedding)
+            next_token = sample_token(prediction, temperature)
             result.append(next_token)
             
         print("KEMP: " + t.detokenize(result))

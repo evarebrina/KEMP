@@ -266,7 +266,7 @@ def cross_entropy_loss(predictions: list[float], target_idx):
     """
     return -math.log(max(predictions[target_idx], 1e-10))
 
-def generate_a_token(embedding: list[float], pred_head):
+def generate_a_token(embedding: list[float], pred_head: PredictionHead):
     predictions = pred_head.predict(embedding)
     best_prediction_id = predictions.index(max(predictions))
     return best_prediction_id

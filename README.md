@@ -1,83 +1,68 @@
-# KEMP - Minimal GPT Implementation
+# KEMP - Minimal GPT from Scratch
 
-A minimal GPT (Generative Pre-trained Transformer) implementation in pure Python with **no external libraries** (no PyTorch, no TensorFlow, no NumPy).
+A transformer-based language model implemented in pure Python (no deep learning libraries).
 
-## 🎯 Project Goal
+## Overview
 
-Learn transformer architecture from first principles by implementing every component manually.
+This project implements a minimal GPT (Generative Pre-trained Transformer) to understand transformer architecture from first principles. Everything is built from scratch including:
 
-## ✨ Features
+- **Tokenizer**: Word-level tokenization with unknown token handling
+- **Embeddings**: Token and positional embeddings
+- **Self-Attention**: Scaled dot-product attention with Q/K/V projections
+- **Training**: Cross-entropy loss with gradient descent
 
-- **Custom Tokenizer**: Word-level tokenization with unknown token handling
-- **Embedding Layer**: Token and positional embeddings
-- **Self-Attention**: Single attention layer with Q/K/V projections
-- **Training Loop**: Cross-entropy loss with gradient descent
-- **Text Generation**: Next-token prediction
+## Features
 
-## 🏗️ Architecture
+- ✅ Pure Python implementation (no PyTorch/TensorFlow)
+- ✅ Self-attention mechanism with Q/K/V matrices
+- ✅ Positional embeddings for sequence ordering
+- ✅ Text generation capabilities
+- ✅ Training loop with loss tracking
 
-```
-Input Text → Tokenizer → Embeddings → Self-Attention → Prediction Head → Output
-```
+## Current Status
 
-- **Embedding dimension**: 64
-- **Vocabulary size**: ~dynamic (based on corpus)
-- **Layers**: 1 attention layer (planned to expand)
+**Stage**: Early training phase
+- Single attention layer functional
+- Prediction head training implemented
+- Successfully learns patterns from training data
+- Can generate text based on learned patterns
 
-## 🚀 Usage
+## Usage
 
 ```bash
 python main.py
 ```
 
-The model trains on cat-themed sentences, then enters interactive mode:
-- Enter a starting prompt
-- Model generates next 30 tokens
+The model will train on the cat corpus and then enter interactive mode where you can provide prompts for text generation.
 
-## 📊 Training Data
+## Architecture
 
-- `cat_corpus.txt`: Primary training corpus about cats
-- Built-in cat sentences for quick training
+- **Embedding Dimension**: 64
+- **Vocabulary**: Dynamic based on training corpus
+- **Context Length**: Up to 32 tokens
+- **Layers**: 1 attention layer (minimal architecture)
 
-## 🛠️ Current Status
+## Training Data
 
-**Implemented:**
-- ✅ Tokenization and vocabulary building
-- ✅ Embedding matrices
-- ✅ Self-attention mechanism
-- ✅ Softmax and cross-entropy loss
-- ✅ Basic training loop
+- `cat_corpus.txt`: Educational text about cats
+- `LightNovels.txt`: Additional training corpus
 
-**In Progress:**
-- 🔄 Full backpropagation through all layers
-- 🔄 Causal attention masking
-- 🔄 Multiple transformer blocks
+## Next Steps
 
-**Planned:**
-- ⏳ Multi-head attention
-- ⏳ Layer normalization
-- ⏳ Better text generation (temperature, sampling)
-- ⏳ Training visualization
+- [ ] Implement full backpropagation through all layers
+- [ ] Add causal attention masking
+- [ ] Stack multiple transformer layers
+- [ ] Improve text generation with temperature/sampling
+- [ ] Add layer normalization
 
-## 📚 What I Learned
+## Learning Goals
 
-- How attention mechanisms work at the matrix level
-- Why gradient descent works for neural networks
-- The importance of proper weight initialization
-- Trade-offs between model complexity and training time
+Understanding transformer architecture by:
+1. Implementing matrix operations from scratch
+2. Building attention mechanisms without frameworks
+3. Training with manual gradient calculations
+4. Debugging at the fundamental level
 
-## 🎓 Educational Purpose
+---
 
-This project demonstrates understanding of:
-- Transformer architecture (Attention is All You Need)
-- Linear algebra operations (dot products, matrix multiplication)
-- Optimization through gradient descent
-- Neural network fundamentals
-
-## 📝 License
-
-Educational project - feel free to use for learning!
-
-## 🙏 Inspiration
-
-Named after someone special who inspired this learning journey.
+*Built as a learning project to understand transformers from the ground up.*

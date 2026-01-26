@@ -1,10 +1,19 @@
+"""
+Self-attention mechanism for the KEMP language model.
+
+This module implements:
+- SimpleSelfAttention: self-attention layer with Q, K, V projections
+- attention: scaled dot-product attention forward pass
+- attention_backward: backpropagation through attention
+- projection_backward: backpropagation through linear projections
+"""
 import random, math
 from embeddings import Embeddings
 
 class SimpleSelfAttention:
     """Self-attention layer with Q, K, V projections"""
     
-    def __init__(self, vocab_size, emb_dim=16, max_len=32, lr=0.05):
+    def __init__(self, vocab_size: int, emb_dim: int = 16, max_len: int = 32, lr: float = 0.05) -> None:
         self.vocab_size = vocab_size
         self.dim = emb_dim
         self.max_len = max_len
@@ -21,7 +30,7 @@ class SimpleSelfAttention:
         self.Wv = [[random.uniform(-0.01, 0.01) for _ in range(emb_dim)]
                     for _ in range(emb_dim)]
 
-    def multiply(self, A, B):
+    def multiply(self, A: list[list[float]], B: list[list[float]]) -> list[list[float]] | None:
         """Matrix multiplication"""
         if len(A[0]) != len(B):
             return None
@@ -36,7 +45,7 @@ class SimpleSelfAttention:
             res.append(row)
         return res
 
-    def forward(self, embeddings):
+    def forward(self, embeddings: list[list[float]]) -> list[list[float]]:
         # Add positional embeddings
         pos_embeddings = self.embeddings.add_positional_embeddings(embeddings)
         
@@ -46,7 +55,7 @@ class SimpleSelfAttention:
         attended = attention(Q, K, V)
         return attended
 
-def attention(Q, K, V):
+def attention(Q: list[list[float]], K: list[list[float]], V: list[list[float]]) -> list[list[float]]:
     """
     Scaled dot-product attention mechanism
     Q: queries (list of embeddings)
@@ -73,7 +82,8 @@ def attention(Q, K, V):
         outputs.append(out)
     return outputs
 
-def attention_backward(Q, K, V, grad_outputs):
+def attention_backward(Q: list[list[float]], K: list[list[float]], V: list[list[float]], 
+                      grad_outputs: list[list[float]]) -> tuple[list[list[float]], list[list[float]], list[list[float]]]:
     """Backpropagate through attenton
     
     Q, K, V: The queries, keys, and values from forward pass
@@ -131,7 +141,7 @@ def attention_backward(Q, K, V, grad_outputs):
         
     return grad_V, grad_K, grad_Q
 
-def dot(A, B):
+def dot(A: list[float], B: list[float]) -> float:
     """Simple dot product between two vectors"""
     if len(A) != len(B):
         raise ValueError("Vectors need to have the same length")
@@ -140,7 +150,7 @@ def dot(A, B):
         s += A[i] * B[i]
     return s
 
-def softmax(xs):
+def softmax(xs: list[float]) -> list[float]:
     """Softmax normalization"""
     m = max(xs)
     exps = []
@@ -149,7 +159,8 @@ def softmax(xs):
     total = sum(exps)
     return [e / total for e in exps]
 
-def projection_backward(inputs, W, grad_output):
+def projection_backward(inputs: list[list[float]], W: list[list[float]], 
+                       grad_output: list[list[float]]) -> tuple[list[list[float]], list[list[float]]]:
     """
     Backprop through: output = inputs × W
     

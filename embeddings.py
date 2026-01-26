@@ -1,16 +1,24 @@
+"""
+Embedding layers for the KEMP language model.
+
+This module provides:
+- EmbeddingMatrix: converts token IDs to dense embeddings
+- PositionalEmbedding: adds positional information to embeddings
+- Embeddings: combines token and positional embeddings
+"""
 import random
 
 
 class EmbeddingMatrix:
     """Converts token IDs to dense embeddings"""
     
-    def __init__(self, voc, dimen=16):
+    def __init__(self, voc: int, dimen: int = 16) -> None:
         self.vocab_size = voc
         self.emb_dim = dimen
         self.emb_matrix = [[random.uniform(-0.01, 0.01) for _ in range(self.emb_dim)]
                             for _ in range(self.vocab_size)]
 
-    def embed(self, tokens: list[int]):
+    def embed(self, tokens: list[int]) -> list[list[float]]:
         """
         Returns an array of embbeddings for tokens.
         
@@ -22,11 +30,11 @@ class EmbeddingMatrix:
             res.append(self.lookup(token))
         return res
 
-    def lookup(self, token_id: int):
+    def lookup(self, token_id: int) -> list[float]:
         """Returns a copy to avoid unintentional overwrite"""
         return [i for i in self.emb_matrix[token_id]]
 
-    def add_inplace_to_row(self, token_id, grad_vec, scale):
+    def add_inplace_to_row(self, token_id: int, grad_vec: list[float], scale: float) -> None:
         row = self.emb_matrix[token_id]
         for i in range(self.emb_dim):
             row[i] += scale * grad_vec[i]
@@ -34,16 +42,16 @@ class EmbeddingMatrix:
 class PositionalEmbedding:
     """Adds positional information to embeddings"""
     
-    def __init__(self, max_len, dim):
+    def __init__(self, max_len: int, dim: int) -> None:
         self.max_len = max_len
         self.dim = dim
         self.rows = [[random.uniform(-0.01, 0.01) for _ in range(dim)]
                      for _ in range(max_len)]
 
-    def get(self, pos):
+    def get(self, pos: int) -> list[float]:
         return self.rows[pos]
 
-    def add_inplace_to_row(self, pos, grad_vec, scale):
+    def add_inplace_to_row(self, pos: int, grad_vec: list[float], scale: float) -> None:
         row = self.rows[pos]
         for i in range(self.dim):
             row[i] += scale * grad_vec[i]
@@ -51,18 +59,18 @@ class PositionalEmbedding:
 class Embeddings:
     """Combines token and positional embeddings"""
     
-    def __init__(self, vocab_size, emb_dim, max_len):
+    def __init__(self, vocab_size: int, emb_dim: int, max_len: int) -> None:
         self.vocab_size = vocab_size
         self.emb_dim = emb_dim
         self.max_len = max_len
         self.token_emb = EmbeddingMatrix(vocab_size, emb_dim)
         self.pos_emb = PositionalEmbedding(max_len, emb_dim)
     
-    def embed(self, token_ids):
+    def embed(self, token_ids: list[int]) -> list[list[float]]:
         """Get token embeddings"""
         return self.token_emb.embed(token_ids)
     
-    def add_positional_embeddings(self, token_embeddings):
+    def add_positional_embeddings(self, token_embeddings: list[list[float]]) -> list[list[float]]:
         """Add positional embeddings to token embeddings"""
         pos_embeddings = []
         dim = len(token_embeddings[0])

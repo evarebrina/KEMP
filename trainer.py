@@ -1,3 +1,12 @@
+"""
+Training script for the KEMP language model.
+
+This script:
+- Loads and preprocesses the training corpus
+- Initializes the model components (tokenizer, attention layer, prediction head)
+- Runs the training loop with sampling-based mini-batches
+- Saves the trained model weights
+"""
 import random, re
 from main import (ToyTokenizer, SimpleSelfAttention, PredictionHead,
                   cross_entropy_loss, train_one_example_with_attention, save_model,

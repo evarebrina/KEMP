@@ -1,3 +1,11 @@
+"""
+Inference script for the KEMP language model.
+
+This script:
+- Loads a trained model from checkpoint
+- Accepts user prompts in an interactive loop
+- Generates text continuations using the trained model
+"""
 from main import (
                   CONFIG,
                   load_model, sample_token

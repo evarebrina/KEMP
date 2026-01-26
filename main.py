@@ -483,11 +483,21 @@ def load_model(filename):
     tokenizer.id_to_word = {int(k): v for k, v in checkpoint['id_to_word'].items()}
     tokenizer.vocab_size = len(tokenizer.word_to_id)
 
+    # Validate embedding matrix dimensions against tokenizer vocab size
+    embedding_matrix = checkpoint.get('embedding_matrix')
+    if not embedding_matrix:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' is missing or empty.")
+    if len(embedding_matrix) != tokenizer.vocab_size:
+        raise ValueError(
+            f"Invalid checkpoint: embedding matrix row count ({len(embedding_matrix)}) "
+            f"does not match tokenizer vocab size ({tokenizer.vocab_size})."
+        )
+
     # Reconstruct model
-    emb_dim = len(checkpoint['embedding_matrix'][0])
+    emb_dim = len(embedding_matrix[0])
     max_len = len(checkpoint['positional_embeddings'])
     attention_layer = SimpleSelfAttention(tokenizer.vocab_size, emb_dim, max_len)
-    attention_layer.embeddings.token_emb.emb_matrix = checkpoint['embedding_matrix']
+    attention_layer.embeddings.token_emb.emb_matrix = embedding_matrix
     attention_layer.embeddings.pos_emb.rows = checkpoint['positional_embeddings']
     attention_layer.Wq = checkpoint['Wq']
     attention_layer.Wk = checkpoint['Wk']

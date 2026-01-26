@@ -487,18 +487,54 @@ def load_model(filename):
     embedding_matrix = checkpoint.get('embedding_matrix')
     if not embedding_matrix:
         raise ValueError("Invalid checkpoint: 'embedding_matrix' is missing or empty.")
-    if len(embedding_matrix) != tokenizer.vocab_size:
-        raise ValueError(
-            f"Invalid checkpoint: embedding matrix row count ({len(embedding_matrix)}) "
-            f"does not match tokenizer vocab size ({tokenizer.vocab_size})."
-        )
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Invalid checkpoint format: expected a JSON object.")
+
+    required_keys = [
+        'embedding_matrix',
+        'positional_embeddings',
+        'Wq',
+        'Wk',
+        'Wv',
+        'pred_head_weights',
+        'pred_head_bias',
+        'vocab',
+        'id_to_word',
+    ]
+    missing = [k for k in required_keys if k not in checkpoint]
+    if missing:
+        raise ValueError(f"Invalid checkpoint: missing keys {missing}")
+
+    embedding_matrix = checkpoint['embedding_matrix']
+    if not isinstance(embedding_matrix, list) or not embedding_matrix:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' must be a non-empty list.")
+    first_row = embedding_matrix[0]
+    try:
+        emb_dim = len(first_row)
+    except TypeError as exc:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' rows must be indexable sequences.") from exc
+    if emb_dim <= 0:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' rows must have positive length.")
+
+    pos_embeddings = checkpoint['positional_embeddings']
+    if not isinstance(pos_embeddings, list) or not pos_embeddings:
+        raise ValueError("Invalid checkpoint: 'positional_embeddings' must be a non-empty list.")
+    max_len = len(pos_embeddings)
+
+    vocab = checkpoint['vocab']
+    if not isinstance(vocab, dict) or not vocab:
+        raise ValueError("Invalid checkpoint: 'vocab' must be a non-empty mapping.")
+
+    # Reconstruct tokenizer
+    tokenizer = ToyTokenizer("")  # Empty init
+    tokenizer.word_to_id = vocab
+    tokenizer.id_to_word = {int(k): v for k, v in checkpoint['id_to_word'].items()}
+    tokenizer.vocab_size = len(tokenizer.word_to_id)
 
     # Reconstruct model
-    emb_dim = len(embedding_matrix[0])
-    max_len = len(checkpoint['positional_embeddings'])
     attention_layer = SimpleSelfAttention(tokenizer.vocab_size, emb_dim, max_len)
     attention_layer.embeddings.token_emb.emb_matrix = embedding_matrix
-    attention_layer.embeddings.pos_emb.rows = checkpoint['positional_embeddings']
+    attention_layer.embeddings.pos_emb.rows = pos_embeddings
     attention_layer.Wq = checkpoint['Wq']
     attention_layer.Wk = checkpoint['Wk']
     attention_layer.Wv = checkpoint['Wv']

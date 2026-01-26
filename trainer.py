@@ -1,6 +1,6 @@
 import random, re
 from main import (ToyTokenizer, SimpleSelfAttention, PredictionHead,
-                  cross_entropy_loss, train_one_example_with_attention, load_model, save_model,
+                  cross_entropy_loss, train_one_example_with_attention, save_model,
                   CONFIG,)
 
 

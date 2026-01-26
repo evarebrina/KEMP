@@ -1,4 +1,4 @@
-from main import (SimpleSelfAttention, PredictionHead, ToyTokenizer, 
+from main import (
                   CONFIG,
                   load_model, sample_token
                   )

@@ -474,8 +474,15 @@ def save_model(filename: str, attention_layer: SimpleSelfAttention, pred_head: P
 
 def load_model(filename):
     """Load checkpoint and reconstruct model"""
-    with open(filename, 'r') as f:
-        checkpoint = json.load(f)
+    try:
+        with open(filename, 'r') as f:
+            checkpoint = json.load(f)
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Model file '{filename}' not found.") from e
+    except (OSError, IOError) as e:
+        raise IOError(f"Error reading model file '{filename}': {e}") from e
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON content in model file '{filename}': {e}") from e
 
     # Reconstruct tokenizer
     tokenizer = ToyTokenizer("")  # Empty init

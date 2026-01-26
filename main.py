@@ -496,6 +496,7 @@ all_words = sorted(set(preprocessed))
 vocab_size = len(all_words)
 print(vocab_size)
 
+
 # Initialize KEMP
 tokenizer = ToyTokenizer(raw_text)
 attention_layer = SimpleSelfAttention(
@@ -504,9 +505,10 @@ attention_layer = SimpleSelfAttention(
     max_len=CONFIG['max_len']
 )
 # Use the attention layer's embedding matrix
-emb_mat = attention_layer.embeddings.token_emb
-pos_emb = attention_layer.embeddings.pos_emb
+emb_mat = attention_layer.E
+pos_emb = attention_layer.P
 pred_head = PredictionHead(tokenizer.vocab_size, CONFIG['emb_dim'])
+
 
 # Tokenize entire corpus for training
 all_tokens = tokenizer.tokenize(raw_text.lower())
@@ -527,7 +529,7 @@ for epoch in range(CONFIG['epochs']):
     sample_positions = random.sample(range(CONFIG['max_len'], len(all_tokens)), num_samples)
     
     for i in sample_positions:
-        # Take previous max_len-1 tokens as input
+        # Take previous context_window-1 tokens as input
         input_tokens = all_tokens[i - (CONFIG['max_len'] - 1):i]
         target_token = all_tokens[i]
 

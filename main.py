@@ -505,8 +505,8 @@ attention_layer = SimpleSelfAttention(
     max_len=CONFIG['max_len']
 )
 # Use the attention layer's embedding matrix
-emb_mat = attention_layer.E
-pos_emb = attention_layer.P
+emb_mat = attention_layer.embeddings.token_emb
+pos_emb = attention_layer.embeddings.pos_emb
 pred_head = PredictionHead(tokenizer.vocab_size, CONFIG['emb_dim'])
 
 

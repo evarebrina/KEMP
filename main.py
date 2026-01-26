@@ -506,10 +506,6 @@ all_words = sorted(set(preprocessed))
 vocab_size = len(all_words)
 print(vocab_size)
 
-dimensions = 64
-epochs_no = 3
-temperature = 0.8
-context_window = 32  # max_len for attention
 
 # Initialize KEMP (your tiny transformer named after your boyfriend!)
 t = ToyTokenizer(raw_text)
@@ -517,14 +513,14 @@ attention_layer = SimpleSelfAttention(t.vocab_size, CONFIG['emb_dim'], max_len=C
 # Use the attention layer's embedding matrix
 emb_mat = attention_layer.E
 pos_emb = attention_layer.P
-pred_head = PredictionHead(t.vocab_size, dimensions)
+pred_head = PredictionHead(t.vocab_size, CONFIG['emb_dim'])
 
 # Tokenize entire corpus for training
 all_tokens = t.tokenize(raw_text.lower())
 print(f"Total tokens: {len(all_tokens)}")
 
 print("Training phase...")
-for epoch in range(epochs_no):
+for epoch in range(CONFIG['epochs']):
     epoch_loss = 0
     correct = 0
     total = 0
@@ -585,7 +581,7 @@ try:
             
             # Use sampling instead of argmax for diversity
             prediction = pred_head.predict(last_embedding)
-            next_token = sample_token(prediction, temperature)
+            next_token = sample_token(prediction, CONFIG['temperature'])
             result.append(next_token)
             
         print("KEMP: " + t.detokenize(result))

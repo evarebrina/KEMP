@@ -25,7 +25,6 @@ try:
         for i in range(n_preds):
             # Use only the last max_len-1 tokens to stay within position embeddings
             context = result[-(attention_layer.max_len - 1):]
-            # embedded = emb_mat.embed(context)
             embedded = attention_layer.embeddings.token_emb.embed(context)
             attended = attention_layer.forward(embedded)
             last_embedding = attended[-1]

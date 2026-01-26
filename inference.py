@@ -7,33 +7,30 @@ from main import (SimpleSelfAttention, PredictionHead, ToyTokenizer,
 # INFERENCE LOOP
 # ============================================================================
 
-# Main loop
-try:
-    attention_layer, pred_head, tokenizer = load_model('weights.json')
-    while True:
-        prompt = ''
-        while prompt == '':
-            prompt = input("Starting word: ")
-        
-        tokens = tokenizer.tokenize(prompt.lower())
-        if not tokens:
-            continue
-        
-        result = tokens
-        n_preds = CONFIG['n_predictions']
+attention_layer, pred_head, tokenizer = load_model('weights.json')
+while True:
+    prompt = ''
+    while prompt == '':
+        prompt = input("Starting word: ")
+    
+    tokens = tokenizer.tokenize(prompt.lower())
+    if not tokens:
+        continue
+    
+    result = tokens
+    n_preds = CONFIG['n_predictions']
 
-        for i in range(n_preds):
-            # Use only the last max_len-1 tokens to stay within position embeddings
-            context = result[-(attention_layer.max_len - 1):]
-            embedded = attention_layer.embeddings.token_emb.embed(context)
-            attended = attention_layer.forward(embedded)
-            last_embedding = attended[-1]
-            
-            # Use sampling instead of argmax for diversity
-            prediction = pred_head.predict(last_embedding)
-            next_token = sample_token(prediction, CONFIG['temperature'])
-            result.append(next_token)
-            
-        print("KEMP: " + tokenizer.detokenize(result))
-finally:
-    pass
+    for i in range(n_preds):
+        # Use only the last max_len-1 tokens to stay within position embeddings
+        context = result[-(attention_layer.max_len - 1):]
+        # embedded = emb_mat.embed(context)
+        embedded = attention_layer.embeddings.token_emb.embed(context)
+        attended = attention_layer.forward(embedded)
+        last_embedding = attended[-1]
+        
+        # Use sampling instead of argmax for diversity
+        prediction = pred_head.predict(last_embedding)
+        next_token = sample_token(prediction, CONFIG['temperature'])
+        result.append(next_token)
+        
+    print("KEMP: " + tokenizer.detokenize(result))

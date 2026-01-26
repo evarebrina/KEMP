@@ -1,6 +1,7 @@
 import random
 import math
 import re
+import json
 
 
 class ToyTokenizer:
@@ -455,6 +456,102 @@ def sample_token(predictions: list[float], temperature=1.0):
             return i
     return len(probs) - 1
 
+def save_model(filename: str, attention_layer: SimpleSelfAttention, pred_head: PredictionHead, tokenizer: ToyTokenizer):
+    """Save all model weights and tokenizer vocab"""
+    checkpoint = {
+        'embedding_matrix': attention_layer.embeddings.token_emb.emb_matrix,
+        'positional_embeddings': attention_layer.embeddings.pos_emb.rows,
+        'Wq': attention_layer.Wq,
+        'Wk': attention_layer.Wk,
+        'Wv': attention_layer.Wv,
+        'pred_head_weights': pred_head.weight_matrix,
+        'pred_head_bias': pred_head.b,
+        'vocab': tokenizer.word_to_id,
+        'id_to_word': tokenizer.id_to_word,
+    }
+    with open(filename, 'w') as f:
+        json.dump(checkpoint, f)
+
+def load_model(filename):
+    """Load checkpoint and reconstruct model"""
+    try:
+        with open(filename, 'r') as f:
+            checkpoint = json.load(f)
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Model file '{filename}' not found.") from e
+    except (OSError, IOError) as e:
+        raise IOError(f"Error reading model file '{filename}': {e}") from e
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON content in model file '{filename}': {e}") from e
+
+    # Reconstruct tokenizer
+    tokenizer = ToyTokenizer("")  # Empty init
+    tokenizer.word_to_id = checkpoint['vocab']
+    tokenizer.id_to_word = {int(k): v for k, v in checkpoint['id_to_word'].items()}
+    tokenizer.vocab_size = len(tokenizer.word_to_id)
+
+    # Validate embedding matrix dimensions against tokenizer vocab size
+    embedding_matrix = checkpoint.get('embedding_matrix')
+    if not embedding_matrix:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' is missing or empty.")
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Invalid checkpoint format: expected a JSON object.")
+
+    required_keys = [
+        'embedding_matrix',
+        'positional_embeddings',
+        'Wq',
+        'Wk',
+        'Wv',
+        'pred_head_weights',
+        'pred_head_bias',
+        'vocab',
+        'id_to_word',
+    ]
+    missing = [k for k in required_keys if k not in checkpoint]
+    if missing:
+        raise ValueError(f"Invalid checkpoint: missing keys {missing}")
+
+    embedding_matrix = checkpoint['embedding_matrix']
+    if not isinstance(embedding_matrix, list) or not embedding_matrix:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' must be a non-empty list.")
+    first_row = embedding_matrix[0]
+    try:
+        emb_dim = len(first_row)
+    except TypeError as exc:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' rows must be indexable sequences.") from exc
+    if emb_dim <= 0:
+        raise ValueError("Invalid checkpoint: 'embedding_matrix' rows must have positive length.")
+
+    pos_embeddings = checkpoint['positional_embeddings']
+    if not isinstance(pos_embeddings, list) or not pos_embeddings:
+        raise ValueError("Invalid checkpoint: 'positional_embeddings' must be a non-empty list.")
+    max_len = len(pos_embeddings)
+
+    vocab = checkpoint['vocab']
+    if not isinstance(vocab, dict) or not vocab:
+        raise ValueError("Invalid checkpoint: 'vocab' must be a non-empty mapping.")
+
+    # Reconstruct tokenizer
+    tokenizer = ToyTokenizer("")  # Empty init
+    tokenizer.word_to_id = vocab
+    tokenizer.id_to_word = {int(k): v for k, v in checkpoint['id_to_word'].items()}
+    tokenizer.vocab_size = len(tokenizer.word_to_id)
+
+    # Reconstruct model
+    attention_layer = SimpleSelfAttention(tokenizer.vocab_size, emb_dim, max_len)
+    attention_layer.embeddings.token_emb.emb_matrix = embedding_matrix
+    attention_layer.embeddings.pos_emb.rows = pos_embeddings
+    attention_layer.Wq = checkpoint['Wq']
+    attention_layer.Wk = checkpoint['Wk']
+    attention_layer.Wv = checkpoint['Wv']
+
+    pred_head = PredictionHead(tokenizer.vocab_size, emb_dim)
+    pred_head.weight_matrix = checkpoint['pred_head_weights']
+    pred_head.b = checkpoint['pred_head_bias']
+
+    return attention_layer, pred_head, tokenizer
+
 # ============================================================================
 # HYPERPARAMETERS
 # ============================================================================
@@ -479,114 +576,3 @@ CONFIG = {
     'corpus_file': './cat_corpus.txt'
 }
 
-# ============================================================================
-# TRAINING DATA SETUP
-# ============================================================================
-
-# Training data
-with open(CONFIG['corpus_file'], "r", encoding="utf-8") as f:
-    raw_text = f.read()
-
-# Tokenize the entire corpus once
-print(raw_text[:99])
-preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
-preprocessed = [item.strip() for item in preprocessed if item.strip()]
-print(preprocessed[:30])
-all_words = sorted(set(preprocessed))
-vocab_size = len(all_words)
-print(vocab_size)
-
-
-# Initialize KEMP
-tokenizer = ToyTokenizer(raw_text)
-attention_layer = SimpleSelfAttention(
-    tokenizer.vocab_size, 
-    CONFIG['emb_dim'], 
-    max_len=CONFIG['max_len']
-)
-# Use the attention layer's embedding matrix
-emb_mat = attention_layer.embeddings.token_emb
-pos_emb = attention_layer.embeddings.pos_emb
-pred_head = PredictionHead(tokenizer.vocab_size, CONFIG['emb_dim'])
-
-
-# Tokenize entire corpus for training
-all_tokens = tokenizer.tokenize(raw_text.lower())
-print(f"Total tokens: {len(all_tokens)}")
-
-# ============================================================================
-# TRAINING LOOP
-# ============================================================================
-
-print("Training phase...")
-for epoch in range(CONFIG['epochs']):
-    epoch_loss = 0
-    correct = 0
-    total = 0
-
-    # Sample random positions instead of using every token (much faster)
-    num_samples = min(CONFIG['num_samples_per_epoch'], len(all_tokens) - CONFIG['max_len'])
-    sample_positions = random.sample(range(CONFIG['max_len'], len(all_tokens)), num_samples)
-    
-    for i in sample_positions:
-        # Take previous context_window-1 tokens as input
-        input_tokens = all_tokens[i - (CONFIG['max_len'] - 1):i]
-        target_token = all_tokens[i]
-
-        embedded = emb_mat.embed(input_tokens)
-        attended = attention_layer.forward(embedded)
-        last_embedding = attended[-1]
-
-        prediction = pred_head.predict(last_embedding)
-        loss = cross_entropy_loss(prediction, target_token)
-        epoch_loss += loss
-
-        # Track accuracy
-        predicted_token = prediction.index(max(prediction))
-        if predicted_token == target_token:
-            correct += 1
-        total += 1
-
-        # Update weights
-        train_one_example_with_attention(
-            input_tokens, target_token, attention_layer, pred_head, 
-            learning_rate=CONFIG['learning_rate']
-        )
-    
-    avg_loss = epoch_loss / total
-    accuracy = correct / total * 100
-    print(f"Epoch {epoch + 1} - Loss: {avg_loss:.4f} - Accuracy: {accuracy:.1f}%")
-
-# ============================================================================
-# INFERENCE LOOP
-# ============================================================================
-
-# Main loop
-try:
-    while True:
-        prompt = ''
-        while prompt == '':
-            prompt = input("Starting word: ")
-        
-        tokens = tokenizer.tokenize(prompt.lower())
-        if not tokens:
-            continue
-        
-        result = tokens
-        n_preds = CONFIG['n_predictions']
-
-        for i in range(n_preds):
-            # Use only the last max_len-1 tokens to stay within position embeddings
-            context = result[-(attention_layer.max_len - 1):]
-            embedded = emb_mat.embed(context)
-            attended = attention_layer.forward(embedded)
-            last_embedding = attended[-1]
-            
-            # Use sampling instead of argmax for diversity
-            prediction = pred_head.predict(last_embedding)
-            next_token = sample_token(prediction, CONFIG['temperature'])
-            result.append(next_token)
-            
-        print("KEMP: " + tokenizer.detokenize(result))
-finally:
-    pass

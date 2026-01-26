@@ -1,0 +1,86 @@
+import random, re
+from main import (ToyTokenizer, SimpleSelfAttention, PredictionHead,
+                  cross_entropy_loss, train_one_example_with_attention, save_model,
+                  CONFIG,)
+
+
+# ============================================================================
+# TRAINING DATA SETUP
+# ============================================================================
+
+# Training data
+with open(CONFIG['corpus_file'], "r", encoding="utf-8") as f:
+    raw_text = f.read()
+
+# Tokenize the entire corpus once
+print(raw_text[:99])
+preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
+preprocessed = [item.strip() for item in preprocessed if item.strip()]
+print(preprocessed[:30])
+all_words = sorted(set(preprocessed))
+vocab_size = len(all_words)
+print(vocab_size)
+
+
+# Initialize KEMP
+tokenizer = ToyTokenizer(raw_text)
+attention_layer = SimpleSelfAttention(
+    tokenizer.vocab_size, 
+    CONFIG['emb_dim'], 
+    max_len=CONFIG['max_len']
+)
+# Use the attention layer's embedding matrix
+emb_mat = attention_layer.embeddings.token_emb
+pos_emb = attention_layer.embeddings.pos_emb
+pred_head = PredictionHead(tokenizer.vocab_size, CONFIG['emb_dim'])
+
+
+# Tokenize entire corpus for training
+all_tokens = tokenizer.tokenize(raw_text.lower())
+print(f"Total tokens: {len(all_tokens)}")
+
+# ============================================================================
+# TRAINING LOOP
+# ============================================================================
+
+print("Training phase...")
+for epoch in range(CONFIG['epochs']):
+    epoch_loss = 0
+    correct = 0
+    total = 0
+
+    # Sample random positions instead of using every token (much faster)
+    num_samples = min(CONFIG['num_samples_per_epoch'], len(all_tokens) - CONFIG['max_len'])
+    sample_positions = random.sample(range(CONFIG['max_len'], len(all_tokens)), num_samples)
+    
+    for i in sample_positions:
+        # Take previous context_window-1 tokens as input
+        input_tokens = all_tokens[i - (CONFIG['max_len'] - 1):i]
+        target_token = all_tokens[i]
+
+        embedded = emb_mat.embed(input_tokens)
+        attended = attention_layer.forward(embedded)
+        last_embedding = attended[-1]
+
+        prediction = pred_head.predict(last_embedding)
+        loss = cross_entropy_loss(prediction, target_token)
+        epoch_loss += loss
+
+        # Track accuracy
+        predicted_token = prediction.index(max(prediction))
+        if predicted_token == target_token:
+            correct += 1
+        total += 1
+
+        # Update weights
+        train_one_example_with_attention(
+            input_tokens, target_token, attention_layer, pred_head, 
+            learning_rate=CONFIG['learning_rate']
+        )
+    
+    avg_loss = epoch_loss / total
+    accuracy = correct / total * 100
+    print(f"Epoch {epoch + 1} - Loss: {avg_loss:.4f} - Accuracy: {accuracy:.1f}%")
+
+# Save model
+save_model('weights.json', attention_layer, pred_head, tokenizer)

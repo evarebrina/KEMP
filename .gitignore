@@ -24,5 +24,8 @@ Thumbs.db
 # Project specific
 *.log
 
+# Model weights
+*.json
+
 # Large Text
 LightNovels.txt

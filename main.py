@@ -1,6 +1,7 @@
 import random
 import math
 import re
+import json
 
 
 class ToyTokenizer:
@@ -455,6 +456,47 @@ def sample_token(predictions: list[float], temperature=1.0):
             return i
     return len(probs) - 1
 
+def save_model(filename: str, attention_layer: SimpleSelfAttention, pred_head: PredictionHead, tokenizer: ToyTokenizer):
+    """Save all model weights and tokenizer vocab"""
+    checkpoint = {
+        'embedding_matrix': attention_layer.embeddings.token_emb.emb_matrix,
+        'positional_embeddings': attention_layer.embeddings.pos_emb.rows,
+        'Wq': attention_layer.Wq,
+        'Wk': attention_layer.Wk,
+        'Wv': attention_layer.Wv,
+        'pred_head_weights': pred_head.weight_matrix,
+        'pred_head_bias': pred_head.b,
+        'vocab': tokenizer.word_to_id,
+        'id_to_word': tokenizer.id_to_word,
+    }
+    with open(filename, 'w') as f:
+        json.dump(checkpoint, f)
+
+def load_model(filename, config):
+    """Load checkpoint and reconstruct model"""
+    with open(filename, 'r') as f:
+        checkpoint = json.load(f)
+
+    # Reconstruct tokenizer
+    tokenizer = ToyTokenizer("")  # Empty init
+    tokenizer.word_to_id = checkpoint['vocab']
+    tokenizer.id_to_word = {int(k): v for k, v in checkpoint['id_to_word'].items()}
+    tokenizer.vocab_size = len(tokenizer.word_to_id)
+
+    #Reconstruct model
+    attention_layer = SimpleSelfAttention(tokenizer.vocab_size, config['emb_dim'], config['max_len'])
+    attention_layer.embeddings.token_emb.emb_matrix = checkpoint['embedding_matrix']
+    attention_layer.embeddings.pos_emb.rows = checkpoint['positional_embeddings']
+    attention_layer.Wq = checkpoint['Wq']
+    attention_layer.Wk = checkpoint['Wk']
+    attention_layer.Wv = checkpoint['Wv']
+
+    pred_head = PredictionHead(tokenizer.vocab_size, config['emb_dim'])
+    pred_head.weight_matrix = checkpoint['pred_head_weights']
+    pred_head.b = checkpoint['pred_head_bias']
+
+    return attention_layer, pred_head, tokenizer
+
 # ============================================================================
 # HYPERPARAMETERS
 # ============================================================================
@@ -557,12 +599,15 @@ for epoch in range(CONFIG['epochs']):
     accuracy = correct / total * 100
     print(f"Epoch {epoch + 1} - Loss: {avg_loss:.4f} - Accuracy: {accuracy:.1f}%")
 
+# Save model
+save_model('weights.json', attention_layer, pred_head, tokenizer)
 # ============================================================================
 # INFERENCE LOOP
 # ============================================================================
 
 # Main loop
 try:
+    attention_layer, pred_head, tokenizer = load_model('weights.json', CONFIG)
     while True:
         prompt = ''
         while prompt == '':

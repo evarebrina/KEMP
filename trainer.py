@@ -34,7 +34,8 @@ pred_head = PredictionHead(tokenizer.vocab_size, CONFIG['emb_dim'])
 
 
 # Tokenize entire corpus for training
-all_tokens = tokenizer.tokenize(raw_text.lower())
+all_tokens = tokenizer.tokenize(raw_text)
+pad_id = tokenizer.word_to_id["<|pad|>"]
 print(f"Total tokens: {len(all_tokens)}")
 
 # ============================================================================
@@ -53,7 +54,12 @@ for epoch in range(CONFIG['epochs']):
     
     for i in sample_positions:
         # Take previous context_window-1 tokens as input
-        input_tokens = all_tokens[i - (CONFIG['max_len'] - 1):i]
+        full_context = all_tokens[i - (CONFIG['max_len'] - 1):i]
+        keep_len = random.randint(1, CONFIG['max_len'])
+        full_context = full_context[-keep_len:]
+        if len(full_context) < CONFIG['max_len'] - 1:
+            full_context = [pad_id] * (CONFIG['max_len'] - 1 - len(full_context)) + full_context
+        input_tokens = full_context
         target_token = all_tokens[i]
 
         prediction, last_embedding, Q, K, V, pos_embeddings = forward_pass(

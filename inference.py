@@ -16,12 +16,13 @@ from main import (
 # ============================================================================
 
 attention_layer, pred_head, tokenizer = load_model('weights.json')
+pad_id = tokenizer.word_to_id["<|pad|>"]
 while True:
     prompt = ''
     while prompt == '':
         prompt = input("Starting word: ")
     
-    tokens = tokenizer.tokenize(prompt.lower())
+    tokens = tokenizer.tokenize(prompt)
     if not tokens:
         continue
     
@@ -31,6 +32,8 @@ while True:
     for i in range(n_preds):
         # Use only the last max_len-1 tokens to stay within position embeddings
         context = result[-(attention_layer.max_len - 1):]
+        if len(context) < attention_layer.max_len - 1:
+            context = [pad_id] * (attention_layer.max_len - 1 - len(context)) + context
         # embedded = emb_mat.embed(context)
         embedded = attention_layer.embeddings.token_emb.embed(context)
         attended = attention_layer.forward(embedded)

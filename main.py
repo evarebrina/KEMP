@@ -471,9 +471,30 @@ def sample_token(predictions: list[float], temperature=1.0):
             return i
     return len(probs) - 1
 
+
+CONFIG = {
+    # Model architecture
+    'emb_dim': 64,              # Embedding dimension
+    'max_len': 32,              # Maximum context window
+    
+    # Training
+    'epochs': 3,                # Number of training epochs
+    'learning_rate': 0.1,       # Base learning rate
+    'emb_lr_factor': 0.1,       # Embedding learning rate multiplier (0.01 of base)
+    'attn_lr_factor': 0.01,     # Attention learning rate multiplier (0.001 of base)
+    'num_samples_per_epoch': 5000,  # Training samples per epoch
+    
+    # Inference
+    'temperature': 0.8,         # Sampling temperature (higher = more random)
+    'n_predictions': 30,        # Number of tokens to generate
+    
+    # Data
+    'corpus_file': './cat_corpus.txt'
+}
+
 # Training data
 
-with open("./cat_corpus.txt", "r", encoding="utf-8") as f:
+with open(CONFIG['corpus_file'], "r", encoding="utf-8") as f:
     raw_text = f.read()
 
 # Tokenize the entire corpus once
@@ -492,7 +513,7 @@ context_window = 32  # max_len for attention
 
 # Initialize KEMP (your tiny transformer named after your boyfriend!)
 t = ToyTokenizer(raw_text)
-attention_layer = SimpleSelfAttention(t.vocab_size, dimensions, max_len=context_window)
+attention_layer = SimpleSelfAttention(t.vocab_size, CONFIG['emb_dim'], max_len=CONFIG['max_len'])
 # Use the attention layer's embedding matrix
 emb_mat = attention_layer.E
 pos_emb = attention_layer.P
@@ -509,12 +530,12 @@ for epoch in range(epochs_no):
     total = 0
 
     # Sample random positions instead of using every token (much faster)
-    num_samples = min(5000, len(all_tokens) - context_window)  # Train on 5000 random samples per epoch
-    sample_positions = random.sample(range(context_window, len(all_tokens)), num_samples)
+    num_samples = min(5000, len(all_tokens) - CONFIG['max_len'])  # Train on 5000 random samples per epoch
+    sample_positions = random.sample(range(CONFIG['max_len'], len(all_tokens)), num_samples)
     
     for i in sample_positions:
         # Take previous context_window-1 tokens as input
-        input_tokens = all_tokens[i - (context_window - 1):i]
+        input_tokens = all_tokens[i - (CONFIG['max_len'] - 1):i]
         target_token = all_tokens[i]
 
         embedded = emb_mat.embed(input_tokens)

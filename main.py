@@ -66,9 +66,16 @@ class Embeddings:
         """Get token embeddings"""
         return self.token_emb.embed(token_ids)
     
-    def add_positional(self, token_embeddings):
+    def add_positional_embeddings(self, token_embeddings):
         """Add positional embeddings to token embeddings"""
-        return add_positional_embeddings(token_embeddings, self.pos_emb)
+        pos_embeddings = []
+        dim = len(token_embeddings[0])
+        for pos in range(len(token_embeddings)):
+            token_emb = token_embeddings[pos]
+            pos_emb = self.pos_emb.get(pos)
+            combined = [token_emb[i] + pos_emb[i] for i in range(dim)]
+            pos_embeddings.append(combined)
+        return pos_embeddings
 
 class SimpleSelfAttention:
     """Self-attention layer with Q, K, V projections"""
@@ -107,7 +114,7 @@ class SimpleSelfAttention:
 
     def forward(self, embeddings):
         # Add positional embeddings
-        pos_embeddings = add_positional_embeddings(embeddings, self.embeddings.pos_emb)
+        pos_embeddings = self.embeddings.add_positional_embeddings(embeddings)
         
         Q = self.multiply(pos_embeddings, self.Wq)
         K = self.multiply(pos_embeddings, self.Wk)
@@ -158,17 +165,6 @@ def softmax(xs):
         exps.append(math.exp(x - m))
     total = sum(exps)
     return [e / total for e in exps]
-
-def add_positional_embeddings(token_embeddings, pos_emb_layer):
-    """Add positional embeddings to token embeddings"""
-    pos_embeddings = []
-    dim = len(token_embeddings[0])
-    for pos in range(len(token_embeddings)):
-        token_emb = token_embeddings[pos]
-        pos_emb = pos_emb_layer.get(pos)
-        combined = [token_emb[i] + pos_emb[i] for i in range(dim)]
-        pos_embeddings.append(combined)
-    return pos_embeddings
 
 def attention(Q, K, V):
     """
@@ -258,7 +254,7 @@ def attention_backward(Q, K, V, grad_outputs):
 def forward_pass(input_tokens, attention_layer, pred_head):
     """Execute forward pass through the model"""
     embedded = attention_layer.embeddings.embed(input_tokens)
-    pos_embeddings = add_positional_embeddings(embedded, attention_layer.embeddings.pos_emb)
+    pos_embeddings = attention_layer.embeddings.add_positional_embeddings(embedded)
     
     Q = attention_layer.multiply(pos_embeddings, attention_layer.Wq)
     K = attention_layer.multiply(pos_embeddings, attention_layer.Wk)

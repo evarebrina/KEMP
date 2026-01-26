@@ -199,7 +199,7 @@ def compute_prediction_head_gradients(pred_head, prediction, target_token, last_
     embedding_gradient = [0.0] * len(last_embedding)
     gradient_correct = 1.0 - prediction[target_token]
     
-    # Accumilate embedding gradients from all tokens
+    # Accumulate embedding gradients from all tokens
     for i in range(len(pred_head.weight_matrix)):
         embedding_gradient[i] += gradient_correct * pred_head.weight_matrix[i][target_token]
         for wrong_word_id in range(len(prediction)):
@@ -214,7 +214,6 @@ def compute_prediction_head_gradients(pred_head, prediction, target_token, last_
         for wrong_word_id in range(len(prediction)):
             if wrong_word_id != target_token:
                 pred_head.weight_matrix[i][wrong_word_id] -= learning_rate * prediction[wrong_word_id] * last_embedding[i]
-                embedding_gradient[i] -= prediction[wrong_word_id] * pred_head.weight_matrix[i][wrong_word_id]
     
     return embedding_gradient
 

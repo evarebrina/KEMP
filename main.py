@@ -483,7 +483,7 @@ def load_model(filename, config):
     tokenizer.id_to_word = {int(k): v for k, v in checkpoint['id_to_word'].items()}
     tokenizer.vocab_size = len(tokenizer.word_to_id)
 
-    #Reconstruct model
+    # Reconstruct model
     attention_layer = SimpleSelfAttention(tokenizer.vocab_size, config['emb_dim'], config['max_len'])
     attention_layer.embeddings.token_emb.emb_matrix = checkpoint['embedding_matrix']
     attention_layer.embeddings.pos_emb.rows = checkpoint['positional_embeddings']

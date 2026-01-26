@@ -6,7 +6,7 @@ This module provides:
 - PositionalEmbedding: adds positional information to embeddings
 - Embeddings: combines token and positional embeddings
 """
-import random
+import random, math
 
 
 class EmbeddingMatrix:
@@ -45,8 +45,20 @@ class PositionalEmbedding:
     def __init__(self, max_len: int, dim: int) -> None:
         self.max_len = max_len
         self.dim = dim
-        self.rows = [[random.uniform(-0.01, 0.01) for _ in range(dim)]
-                     for _ in range(max_len)]
+        self.rows = self._generate_positional_encoding(max_len, dim)
+        
+    def _generate_positional_encoding(self, max_len: int, dim: int) -> list[list[float]]:
+        """Generate positional encodings using sine and cosine functions"""
+        rows = []
+        for pos in range(max_len):
+            row = []
+            for i in range(dim):
+                if i % 2 == 0:  # Even indices: sine
+                    row.append(math.sin(pos / (10000 ** (i / dim))))
+                else:  # Odd indices: cosine
+                    row.append(math.cos(pos / (10000 ** ((i - 1) / dim))))
+            rows.append(row)
+        return rows
 
     def get(self, pos: int) -> list[float]:
         return self.rows[pos]

@@ -8,9 +8,11 @@ This script:
 - Saves the trained model weights
 """
 import random, re
-from main import (ToyTokenizer, SimpleSelfAttention, PredictionHead,
-                  cross_entropy_loss, train_one_example_with_attention, save_model,
+from main import (PredictionHead,
+                  cross_entropy_loss, train_one_example_with_attention, save_model, forward_pass,
                   CONFIG,)
+from attention import SimpleSelfAttention
+from tokenizer import ToyTokenizer
 
 
 # ============================================================================
@@ -21,16 +23,6 @@ from main import (ToyTokenizer, SimpleSelfAttention, PredictionHead,
 with open(CONFIG['corpus_file'], "r", encoding="utf-8") as f:
     raw_text = f.read()
 
-# Tokenize the entire corpus once
-print(raw_text[:99])
-preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', raw_text)
-preprocessed = [item.strip() for item in preprocessed if item.strip()]
-print(preprocessed[:30])
-all_words = sorted(set(preprocessed))
-vocab_size = len(all_words)
-print(vocab_size)
-
-
 # Initialize KEMP
 tokenizer = ToyTokenizer(raw_text)
 attention_layer = SimpleSelfAttention(
@@ -38,9 +30,6 @@ attention_layer = SimpleSelfAttention(
     CONFIG['emb_dim'], 
     max_len=CONFIG['max_len']
 )
-# Use the attention layer's embedding matrix
-emb_mat = attention_layer.embeddings.token_emb
-pos_emb = attention_layer.embeddings.pos_emb
 pred_head = PredictionHead(tokenizer.vocab_size, CONFIG['emb_dim'])
 
 
@@ -67,11 +56,12 @@ for epoch in range(CONFIG['epochs']):
         input_tokens = all_tokens[i - (CONFIG['max_len'] - 1):i]
         target_token = all_tokens[i]
 
-        embedded = emb_mat.embed(input_tokens)
-        attended = attention_layer.forward(embedded)
-        last_embedding = attended[-1]
+        prediction, last_embedding, Q, K, V, pos_embeddings = forward_pass(
+            input_tokens, 
+            attention_layer, 
+            pred_head
+        )
 
-        prediction = pred_head.predict(last_embedding)
         loss = cross_entropy_loss(prediction, target_token)
         epoch_loss += loss
 

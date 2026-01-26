@@ -472,7 +472,7 @@ def save_model(filename: str, attention_layer: SimpleSelfAttention, pred_head: P
     with open(filename, 'w') as f:
         json.dump(checkpoint, f)
 
-def load_model(filename, config):
+def load_model(filename):
     """Load checkpoint and reconstruct model"""
     with open(filename, 'r') as f:
         checkpoint = json.load(f)
@@ -484,14 +484,16 @@ def load_model(filename, config):
     tokenizer.vocab_size = len(tokenizer.word_to_id)
 
     # Reconstruct model
-    attention_layer = SimpleSelfAttention(tokenizer.vocab_size, config['emb_dim'], config['max_len'])
+    emb_dim = len(checkpoint['embedding_matrix'][0])
+    max_len = len(checkpoint['positional_embeddings'])
+    attention_layer = SimpleSelfAttention(tokenizer.vocab_size, emb_dim, max_len)
     attention_layer.embeddings.token_emb.emb_matrix = checkpoint['embedding_matrix']
     attention_layer.embeddings.pos_emb.rows = checkpoint['positional_embeddings']
     attention_layer.Wq = checkpoint['Wq']
     attention_layer.Wk = checkpoint['Wk']
     attention_layer.Wv = checkpoint['Wv']
 
-    pred_head = PredictionHead(tokenizer.vocab_size, config['emb_dim'])
+    pred_head = PredictionHead(tokenizer.vocab_size, emb_dim)
     pred_head.weight_matrix = checkpoint['pred_head_weights']
     pred_head.b = checkpoint['pred_head_bias']
 
@@ -607,7 +609,7 @@ save_model('weights.json', attention_layer, pred_head, tokenizer)
 
 # Main loop
 try:
-    attention_layer, pred_head, tokenizer = load_model('weights.json', CONFIG)
+    attention_layer, pred_head, tokenizer = load_model('weights.json')
     while True:
         prompt = ''
         while prompt == '':

@@ -213,11 +213,6 @@ def load_model(filename: str) -> tuple[SimpleSelfAttention, PredictionHead, ToyT
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON content in model file '{filename}': {e}") from e
 
-    # Reconstruct tokenizer
-    tokenizer = ToyTokenizer("")  # Empty init
-    tokenizer.word_to_id = checkpoint['vocab']
-    tokenizer.id_to_word = {int(k): v for k, v in checkpoint['id_to_word'].items()}
-    tokenizer.vocab_size = len(tokenizer.word_to_id)
 
     # Validate embedding matrix dimensions against tokenizer vocab size
     embedding_matrix = checkpoint.get('embedding_matrix')

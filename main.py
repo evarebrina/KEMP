@@ -1,48 +1,9 @@
 import random
 import math
-import re
 import json
 
+from tokenizer import ToyTokenizer
 
-class ToyTokenizer:
-    """Converts text to token IDs and back"""
-    
-    def __init__(self,  corpus:str):
-
-        self.id_to_word = {}
-        self.word_to_id = {}
-
-        preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', corpus)                 
-        preprocessed = [
-            item.strip() for item in preprocessed if item.strip()
-        ]
-        unique_words = sorted(list(set(preprocessed)))
-        unique_words.extend(["", "<|unk|>"])
-
-        self.vocab_size = len(unique_words)
-
-        for i, word in enumerate(unique_words):
-            self.id_to_word[i] = word
-            self.word_to_id[word] = i
-    
-    def tokenize(self, text: str):
-        preprocessed = re.split(r'([,.:;?_!"()\']|--|\s)', text)
-                                
-        preprocessed = [
-            item.strip() for item in preprocessed if item.strip()
-        ]
-        # if s not in self.word_to_id:
-
-        ids = [self.word_to_id.get(s, self.word_to_id['<|unk|>']) for s in preprocessed]
-
-        return ids
-        
-    
-    def detokenize(self, ids):
-        text = " ".join([self.id_to_word[i] for i in ids])
-        # Replace spaces before the specified punctuations
-        text = re.sub(r'\s+([,.?!"()\'])', r'\1', text)
-        return text
 
 class EmbeddingMatrix:
     """Converts token IDs to dense embeddings"""

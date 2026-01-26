@@ -19,7 +19,7 @@ class ToyTokenizer:
             item.strip() for item in preprocessed if item.strip()
         ]
         unique_words = sorted(list(set(preprocessed)))
-        unique_words.extend(["", "<|unk|>"])
+        unique_words.extend(["<|pad|>", "<|endoftext|>", "<|unk|>"])
 
         self.vocab_size = len(unique_words)
 

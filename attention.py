@@ -101,7 +101,7 @@ def attention_backward(Q: list[list[float]], K: list[list[float]], V: list[list[
 
     # For each query position
     for i in range(seq_len):
-        # Recalculate attention weihts (same as forward pass)
+        # Recalculate attention weights (same as forward pass)
         scores = []
         for j in range(seq_len):
             score = dot(Q[i], K[j]) * scale  # Apply scaling

@@ -5,6 +5,7 @@ This module provides ToyTokenizer which converts text to token IDs and back,
 handling basic punctuation splitting and unknown tokens.
 """
 import re
+import pickle
 
 class ToyTokenizer:
     """Converts text to token IDs and back"""
@@ -38,10 +39,20 @@ class ToyTokenizer:
         ids = [self.word_to_id.get(s, self.word_to_id['<|unk|>']) for s in preprocessed]
 
         return ids
-        
-    
+          
     def detokenize(self, ids: list[int]) -> str:
         text = " ".join([self.id_to_word[i] for i in ids])
         # Replace spaces before the specified punctuations
         text = re.sub(r'\s+([,.?!"()\'])', r'\1', text)
         return text
+
+    def save(self, path: str) -> None:
+        """Serialize tokenizer vocab to disk."""
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str) -> "ToyTokenizer":
+        """Load tokenizer vocab from disk."""
+        with open(path, "rb") as f:
+            return pickle.load(f)

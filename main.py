@@ -35,7 +35,8 @@ class PredictionHead:
                 total += (embedding[j] * self.weight_matrix[j][i])
             scores[i] = total
         
-        exp_scores = [math.exp(s) for s in scores]
+        m = max(scores)
+        exp_scores = [math.exp(s - m) for s in scores]
         total_exp = sum(exp_scores)
         probabilities = [exp / total_exp for exp in exp_scores]
         return probabilities

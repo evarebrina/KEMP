@@ -64,9 +64,8 @@ class PositionalEmbedding:
         return self.rows[pos]
 
     def add_inplace_to_row(self, pos: int, grad_vec: list[float], scale: float) -> None:
-        row = self.rows[pos]
-        for i in range(self.dim):
-            row[i] += scale * grad_vec[i]
+        pass
+        # No need to train positional embedding
 
 class Embeddings:
     """Combines token and positional embeddings"""
